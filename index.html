@@ -1,0 +1,493 @@
+// v2 adds badges
+import React, { useState, useEffect, useCallback } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+
+
+// --- SVG Icons ---
+// This is a component that renders the lanternfly image you see on the main button.
+// It's created with SVG (Scalable Vector Graphics), which is a way to draw images with code.
+const LanternflyIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" className="w-24 h-24 text-gray-800 dark:text-gray-200">
+        {/* ... existing SVG code ... */}
+        <defs>
+            <radialGradient id="wingGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+                <stop offset="0%" style={{ stopColor: '#FBEBDE' }} />
+                <stop offset="100%" style={{ stopColor: '#F8C8A3' }} />
+            </radialGradient>
+            <radialGradient id="wingGradientRed" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+                <stop offset="0%" style={{ stopColor: '#E57373' }} />
+                <stop offset="100%" style={{ stopColor: '#D32F2F' }} />
+            </radialGradient>
+        </defs>
+        {/* Body */}
+        <path d="M100 50 C 110 70, 110 90, 100 150 C 90 90, 90 70, 100 50 Z" fill="#333" />
+        {/* Head */}
+        <circle cx="100" cy="50" r="10" fill="#222" />
+        <circle cx="95" cy="48" r="3" fill="#FFF" />
+        <circle cx="105" cy="48" r="3" fill="#FFF" />
+        {/* Under Wings (Red) */}
+        <path d="M100 80 C 40 100, 40 140, 90 145 L 100 130 Z" fill="url(#wingGradientRed)" stroke="#5D4037" strokeWidth="2"/>
+        <path d="M100 80 C 160 100, 160 140, 110 145 L 100 130 Z" fill="url(#wingGradientRed)" stroke="#5D4037" strokeWidth="2"/>
+        {/* Spots on red wings */}
+        <circle cx="75" cy="125" r="4" fill="#222" />
+        <circle cx="60" cy="115" r="5" fill="#222" />
+        <circle cx="125" cy="125" r="4" fill="#222" />
+        <circle cx="140" cy="115" r="5" fill="#222" />
+        {/* Top Wings (Spotted) */}
+        <path d="M100 70 C 20 90, 20 150, 90 140 L 100 120 Z" fill="url(#wingGradient)" stroke="#A1887F" strokeWidth="2"/>
+        <path d="M100 70 C 180 90, 180 150, 110 140 L 100 120 Z" fill="url(#wingGradient)" stroke="#A1887F" strokeWidth="2"/>
+        {/* Spots on top wings */}
+        <circle cx="65" cy="110" r="4" fill="#222" />
+        <circle cx="50" cy="120" r="3" fill="#222" />
+        <circle cx="80" cy="130" r="3.5" fill="#222" />
+        <circle cx="40" cy="100" r="4" fill="#222" />
+        <circle cx="135" cy="110" r="4" fill="#222" />
+        <circle cx="150" cy="120" r="3" fill="#222" />
+        <circle cx="120" cy="130" r="3.5" fill="#222" />
+        <circle cx="160" cy="100" r="4" fill="#222" />
+    </svg>
+);
+
+
+// --- BadgeIcon Component ---
+// Reusable UI for rendering an SVG badge inside a styled circle.
+const BadgeIcon = ({ color, icon: Icon }) => (
+  <div
+    className={`w-24 h-24 rounded-full flex items-center justify-center shadow-md ${color}`}
+  >
+    <Icon />
+  </div>
+);
+
+
+// --- Badge SVGs ---
+// Each tier has its own SVG graphic. You can adjust fill/stroke to match theme.
+
+
+const BronzeIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24">
+    <ellipse cx="12" cy="12" rx="5" ry="6" fill="#b87333" />
+    <circle cx="8.8" cy="9.4" r="1.2" fill="#b87333" />
+    <rect x="11.8" y="6" width="0.8" height="12" fill="#8a4b25" rx="0.4" />
+    <path d="M7.8 6.6 C7.2 5.4 6 5.2 5.6 6" stroke="#8a4b25" strokeWidth="0.9" fill="none" strokeLinecap="round"/>
+    <path d="M9.8 6.6 C10.4 5.4 11.6 5.2 12 6" stroke="#8a4b25" strokeWidth="0.9" fill="none" strokeLinecap="round"/>
+    <path d="M7 14 L5 15" stroke="#8a4b25" strokeWidth="0.9" strokeLinecap="round"/>
+    <path d="M7 12 L5 11" stroke="#8a4b25" strokeWidth="0.9" strokeLinecap="round"/>
+    <path d="M17 14 L19 15" stroke="#8a4b25" strokeWidth="0.9" strokeLinecap="round"/>
+    <path d="M17 12 L19 11" stroke="#8a4b25" strokeWidth="0.9" strokeLinecap="round"/>
+  </svg>
+);
+
+
+const SilverIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24">
+    <path d="M12 2 L18 5 V11.8 C18 15.6 15.2 18.8 12 20 C8.8 18.8 6 15.6 6 11.8 V5 L12 2 Z" fill="#c0c0c0"/>
+    <ellipse cx="12" cy="11" rx="2.3" ry="2.7" fill="#ffffff"/>
+    <rect x="11.3" y="8.2" width="1.4" height="1.2" rx="0.3" fill="#ffffff"/>
+    <path d="M10 11.8 C10 12.6 11 13 12 13 C13 13 14 12.6 14 11.8" stroke="#9a9a9a" strokeWidth="0.7" fill="none" strokeLinecap="round"/>
+    <path d="M11.2 8.1 L10.3 7.2" stroke="#9a9a9a" strokeWidth="0.7" strokeLinecap="round"/>
+    <path d="M12.8 8.1 L13.7 7.2" stroke="#9a9a9a" strokeWidth="0.7" strokeLinecap="round"/>
+  </svg>
+);
+
+
+const GoldIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24">
+    <path d="M12 2 L18 5 V11.5 C18 14.8 15.8 17.5 12 18.6 C8.2 17.5 6 14.8 6 11.5 V5 L12 2 Z" fill="#ffd700"/>
+    <polygon points="12,7.2 12.9,9.6 15.6,9.6 13.3,11.1 14.2,13.6 12,12.1 9.8,13.6 10.7,11.1 8.4,9.6 11.1,9.6"
+             fill="#ffffff"/>
+    <path d="M12 3.2 L17 6 V11.5 C17 14 14.8 16.2 12 17 C9.2 16.2 7 14 7 11.5 V6 L12 3.2" fill="none" stroke="#b58f00" strokeWidth="0.6"/>
+  </svg>
+);
+
+
+const EpicIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24">
+    <circle cx="11.5" cy="12" r="4.5" fill="#8a2be2"/>
+    <ellipse cx="11.5" cy="12.2" rx="6" ry="2.2" transform="rotate(-20 11.5 12.2)" fill="none" stroke="#6b1fb8" strokeWidth="1.1"/>
+    <path d="M10.6 11.2 L9.6 11.6" stroke="#6b1fb8" strokeWidth="0.6" strokeLinecap="round"/>
+    <path d="M12.4 11.2 L13.4 11.6" stroke="#6b1fb8" strokeWidth="0.6" strokeLinecap="round"/>
+  </svg>
+);
+
+
+const MythicIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10" fill="none" stroke="#4b0082" strokeWidth="1.2"/>
+    <path d="M12 6 C14.5 6.5 16 9.2 15 11.8 C14 14.6 11.5 15.8 9.5 15 C8.8 14.7 8.2 14 8.2 13.2 C8.2 11.8 9.6 11 11 11 C12.4 11 13.2 12 13 13.2" stroke="#4b0082" strokeWidth="1" fill="none" strokeLinecap="round"/>
+    <polygon points="12,9.5 12.5,10.8 14,11 12.8,11.8 13.1,13.2 12,12.4 10.9,13.2 11.2,11.8 10,11 11.5,10.8"
+             fill="#00bfff"/>
+  </svg>
+);
+
+
+// --- Badge Definitions ---
+// 25 total, mapped to thresholds and icons
+const BADGES = {
+  'BUG_BOPPER': { threshold: 30, label: 'Bug Bopper', color: 'bg-orange-700', icon: BronzeIcon },
+  'CREEPER_CRUSHER': { threshold: 40, label: 'Creeper Crusher', color: 'bg-orange-700', icon: BronzeIcon },
+  'LANTERNFLY_SWATTER': { threshold: 50, label: 'Lanternfly Swatter', color: 'bg-orange-700', icon: BronzeIcon },
+  'PEST_PATROLLER': { threshold: 60, label: 'Pest Patroller', color: 'bg-orange-700', icon: BronzeIcon },
+  'BUG_BASHER': { threshold: 70, label: 'Bug Basher', color: 'bg-orange-700', icon: BronzeIcon },
+  'SWARM_SMASHER': { threshold: 80, label: 'Swarm Smasher', color: 'bg-orange-700', icon: BronzeIcon },
+  'INSECT_STOPPER': { threshold: 90, label: 'Insect Invader Stopper', color: 'bg-orange-700', icon: BronzeIcon },
+  'TREE_PROTECTOR': { threshold: 100, label: 'Tree Protector', color: 'bg-orange-700', icon: BronzeIcon },
+  'BUG_HUNTER': { threshold: 120, label: 'Bug Hunter', color: 'bg-orange-700', icon: BronzeIcon },
+  'INFESTATION_FIGHTER': { threshold: 150, label: 'Infestation Fighter', color: 'bg-orange-700', icon: BronzeIcon },
+
+
+  'EXTERMINATOR_ELITE': { threshold: 200, label: 'Exterminator Elite', color: 'bg-gray-400', icon: SilverIcon },
+  'PEST_PUNISHER': { threshold: 250, label: 'Pest Punisher', color: 'bg-gray-400', icon: SilverIcon },
+  'WING_BREAKER': { threshold: 300, label: 'Wing Breaker', color: 'bg-gray-400', icon: SilverIcon },
+  'INSECT_NEMESIS': { threshold: 350, label: 'Insect Nemesis', color: 'bg-gray-400', icon: SilverIcon },
+
+
+  'ECO_DEFENDER': { threshold: 400, label: 'Eco Defender', color: 'bg-yellow-400', icon: GoldIcon },
+  'LANTERNFLY_SLAYER': { threshold: 450, label: 'Lanternfly Slayer', color: 'bg-yellow-400', icon: GoldIcon },
+  'NATURE_GUARDIAN': { threshold: 500, label: 'Nature’s Guardian', color: 'bg-yellow-400', icon: GoldIcon },
+  'PEST_ANNIHILATOR': { threshold: 600, label: 'Pest Annihilator', color: 'bg-yellow-400', icon: GoldIcon },
+
+
+  'BUGSTORM_BREAKER': { threshold: 700, label: 'Bugstorm Breaker', color: 'bg-purple-600', icon: EpicIcon },
+  'ECO_AVENGER': { threshold: 800, label: 'Eco Avenger', color: 'bg-purple-600', icon: EpicIcon },
+  'PLANET_PROTECTOR': { threshold: 850, label: 'Planet Protector', color: 'bg-purple-600', icon: EpicIcon },
+  'GALACTIC_HERO': { threshold: 900, label: 'Galactic Hero', color: 'bg-purple-600', icon: EpicIcon },
+
+
+  'UNIVERSE_UNBUGGER': { threshold: 950, label: 'Universe Unbugger', color: 'bg-indigo-800', icon: MythicIcon },
+  'LEGENDARY_EXTERMINATOR': { threshold: 975, label: 'Legendary Exterminator', color: 'bg-indigo-800', icon: MythicIcon },
+  'MYTHIC_PEST_SLAYER': { threshold: 1000, label: 'Mythic Pest Slayer', color: 'bg-indigo-800', icon: MythicIcon },
+};
+
+
+
+
+// --- Main App Component ---
+// This is the main heart of your application.
+export default function App() {
+    // --- State Variables ---
+    // "State" is how React components remember things. We use `useState` to create variables
+    // that, when they change, will cause the UI to update automatically.
+    const [dailyKills, setDailyKills] = useState(0); // Tracks today's kills.
+    const [totalKills, setTotalKills] = useState(0); // Tracks all-time kills.
+    const [userId, setUserId] = useState(null); // Stores the unique ID for the current user.
+    const [db, setDb] = useState(null); // Holds the connection to the Firestore database.
+    const [auth, setAuth] = useState(null); // Holds the connection for Firebase Authentication.
+    const [isAuthReady, setIsAuthReady] = useState(false); // A flag to know when Firebase has successfully signed the user in.
+    const [lastKillDate, setLastKillDate] = useState(null); // Remembers the date of the last kill to reset daily count.
+    const [showResetConfirm, setShowResetConfirm] = useState(false); // Controls whether the reset confirmation pop-up is visible.
+    const [userBadges, setUserBadges] = useState([]); // A list (or "array") of the badges the user has earned.
+    
+    // Gets today's date in a consistent format (like "2023-10-27").
+    const today = new Date().toISOString().split('T')[0];
+
+
+    // --- Firebase Initialization and Auth ---
+    // `useEffect` is a React Hook that runs code after the component has rendered.
+    // This one runs only once (because of the empty `[]` at the end) to set up Firebase.
+    useEffect(() => {
+        // NOTE FOR YOU: These special variables (`__app_id`, `__firebase_config`, etc.)
+        // are provided by the environment you're running this in. You don't need to change them.
+        // They handle the connection details for your database.
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        
+        if (Object.keys(firebaseConfig).length === 0) {
+            console.error("Firebase config is not available.");
+            return;
+        }
+
+
+        // Initialize Firebase services.
+        const app = initializeApp(firebaseConfig);
+        const firestoreDb = getFirestore(app);
+        const firebaseAuth = getAuth(app);
+        
+        // Store the database and auth connections in our state.
+        setDb(firestoreDb);
+        setAuth(firebaseAuth);
+
+
+        // This function listens for changes in the user's login status.
+        const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
+            if (user) {
+                // If the user is logged in, we store their unique ID.
+                setUserId(user.uid);
+            } else {
+                // If no user is logged in, we sign them in anonymously.
+                // This creates a temporary account so we can still save their data.
+                try {
+                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(firebaseAuth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(firebaseAuth);
+                    }
+                } catch (error) {
+                    console.error("Error signing in:", error);
+                }
+            }
+            // We set this to true so other parts of the app know it's safe to talk to the database.
+            setIsAuthReady(true);
+        });
+
+
+        // This is a cleanup function that runs when the component is removed, to prevent memory leaks.
+        return () => unsubscribe();
+    }, []);
+
+
+    // --- Data Fetching and Daily Reset Logic ---
+    // This function is responsible for getting the user's saved data from Firestore.
+    // `useCallback` is a performance optimization.
+    const fetchData = useCallback(async () => {
+        // We wait until Firebase is ready and we have a user ID before trying to fetch data.
+        if (!isAuthReady || !db || !userId) return;
+        
+        // This defines the specific location in the database where this user's data is stored.
+        // Think of it like a file path: artifacts/{appId}/users/{userId}/lanternfly_counts/data
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const docRef = doc(db, 'artifacts', appId, 'users', userId, 'lanternfly_counts', 'data');
+        
+        try {
+            const docSnap = await getDoc(docRef);
+
+
+            if (docSnap.exists()) {
+                // If the user has data saved, we load it into our state variables.
+                const data = docSnap.data();
+                const currentTotal = data.totalKills || 0;
+                setTotalKills(currentTotal);
+                setUserBadges(data.badges || []);
+                
+                // This is the logic to reset the daily counter.
+                if (data.lastKillDate === today) {
+                    // If the last kill was today, we load the daily count.
+                    setDailyKills(data.dailyKills || 0);
+                } else {
+                    // If the last kill was on a previous day, we reset the daily count to 0.
+                    setDailyKills(0);
+                    await updateDoc(docRef, { dailyKills: 0 });
+                }
+                setLastKillDate(data.lastKillDate);
+
+
+            } else {
+                // If the user is new and has no data, we create a new document for them with starting values.
+                await setDoc(docRef, {
+                    totalKills: 0,
+                    dailyKills: 0,
+                    lastKillDate: today,
+                    badges: []
+                });
+            }
+        } catch (error) {
+            console.error("Error fetching or creating document:", error);
+        }
+    }, [isAuthReady, db, userId, today]);
+    
+    // This `useEffect` calls the `fetchData` function whenever the dependencies (`fetchData`) change.
+    // This ensures we load the user's data as soon as they are signed in.
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+
+    // --- Badge Awarding Logic ---
+    // This function checks if the user's new total kill count has earned them any new badges.
+    const checkAndAwardBadges = useCallback(async (currentTotalKills, docRef) => {
+        const newBadges = [];
+        // We loop through our BADGES object.
+        for (const badgeKey in BADGES) {
+            // Check if the user's total is high enough AND they don't already have the badge.
+            if (currentTotalKills >= BADGES[badgeKey].threshold && !userBadges.includes(badgeKey)) {
+                newBadges.push(badgeKey); // Add the new badge to a temporary list.
+            }
+        }
+
+
+        // If we found any new badges to award...
+        if (newBadges.length > 0) {
+            const updatedBadges = [...userBadges, ...newBadges];
+            setUserBadges(updatedBadges); // Update the badges on the screen.
+            await updateDoc(docRef, { badges: updatedBadges }); // Save the new list of badges to the database.
+        }
+    }, [userBadges]);
+
+
+
+
+    // --- Core Logic for Incrementing Kills ---
+    // This function is called when the user clicks the main "splat" button.
+    const handleKill = async () => {
+        if (!db || !userId) return; // Safety check.
+        
+        // We calculate the new counts.
+        const newDailyKills = dailyKills + 1;
+        const newTotalKills = totalKills + 1;
+
+
+        // We update the numbers on the screen immediately for a fast user experience.
+        setDailyKills(newDailyKills);
+        setTotalKills(newTotalKills);
+        setLastKillDate(today);
+
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const docRef = doc(db, 'artifacts', appId, 'users', userId, 'lanternfly_counts', 'data');
+        
+        try {
+             // We save the new numbers and today's date to the database.
+             await setDoc(docRef, {
+                totalKills: newTotalKills,
+                dailyKills: newDailyKills,
+                lastKillDate: today
+            }, { merge: true }); // `merge: true` prevents us from accidentally deleting the badges array.
+            
+            // After saving, we check if they earned a new badge.
+            await checkAndAwardBadges(newTotalKills, docRef);
+
+
+        } catch (error) {
+            console.error("Error updating document: ", error);
+            // If there's an error saving, we roll back the numbers on the screen to what they were.
+            setDailyKills(dailyKills);
+            setTotalKills(totalKills);
+        }
+    };
+    
+    // --- Reset Total Kills Logic ---
+    // This function runs when the user confirms they want to reset their score.
+    const handleResetTotal = async () => {
+         if (!db || !userId) return;
+
+
+        // Reset all the state variables to their starting values.
+        setDailyKills(0);
+        setTotalKills(0);
+        setUserBadges([]);
+        setLastKillDate(today);
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const docRef = doc(db, 'artifacts', appId, 'users', userId, 'lanternfly_counts', 'data');
+        
+        try {
+             // We overwrite the data in the database with the starting values.
+             await setDoc(docRef, {
+                totalKills: 0,
+                dailyKills: 0,
+                lastKillDate: today,
+                badges: []
+            });
+        } catch (error) {
+            console.error("Error resetting document: ", error);
+        } finally {
+            // This hides the confirmation pop-up.
+            setShowResetConfirm(false);
+        }
+    };
+
+
+
+
+    // --- UI Rendering ---
+    // The `return` statement contains all the JSX (HTML-like code) that describes what the app looks like.
+    return (
+        <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex flex-col items-center justify-between p-4 font-sans">
+            
+            {/* Header */}
+            <header className="w-full text-center">
+                <h1 className="text-4xl md:text-5xl font-bold text-red-600 dark:text-red-500">Splat the Fly</h1>
+                <p className="text-lg text-gray-600 dark:text-gray-400 mt-1">Spotted Lanternfly Counter</p>
+            </header>
+
+
+            {/* Main Content: Counter and Button */}
+            <main className="flex flex-col items-center justify-center flex-grow w-full">
+                
+                {/* Scoreboards */}
+                <div className="flex flex-col md:flex-row gap-4 md:gap-8 mb-10 w-full max-w-md">
+                    <div className="flex-1 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg text-center">
+                        <p className="text-xl font-semibold text-gray-500 dark:text-gray-400">Today's Kills</p>
+                        <p className="text-6xl font-bold text-red-600 dark:text-red-500">{dailyKills}</p>
+                    </div>
+                    <div className="flex-1 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg text-center">
+                        <p className="text-xl font-semibold text-gray-500 dark:text-gray-400">Total Kills</p>
+                        <p className="text-6xl font-bold">{totalKills}</p>
+                    </div>
+                </div>
+
+
+                {/* The Kill Button */}
+                <div className="relative">
+                     <button 
+                        onClick={handleKill}
+                        aria-label="Add one lanternfly kill"
+                        className="w-48 h-48 bg-gradient-to-br from-red-500 to-red-700 rounded-full flex items-center justify-center text-white shadow-2xl transform transition-transform duration-150 active:scale-90 focus:outline-none focus:ring-4 focus:ring-red-400 dark:focus:ring-red-600">
+                        <LanternflyIcon />
+                    </button>
+                </div>
+                <p className="mt-6 text-xl font-medium">Tap to splat!</p>
+
+
+                {/* Badges Section */}
+                {/* This is conditional rendering. The badge section will only appear if the user has at least one badge. */}
+                {userBadges.length > 0 && (
+                     <div className="mt-12 w-full max-w-md">
+                        <h2 className="text-2xl font-bold text-center mb-4">Your Badges</h2>
+                        <div className="flex flex-wrap justify-center gap-4">
+                            {/* We "map" over the userBadges array, creating a badge icon and label for each one they've earned. */}
+                            {userBadges.map(badgeKey => (
+                                <div key={badgeKey} className="flex flex-col items-center gap-2">
+                                    <BadgeIcon color={BADGES[badgeKey].color}>
+                                        {BADGES[badgeKey].icon}
+                                    </BadgeIcon>
+                                    <span className="font-semibold">{BADGES[badgeKey].label}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </main>
+            
+            {/* Footer and Reset Button */}
+            <footer className="w-full text-center mt-8">
+                 <button 
+                    onClick={() => setShowResetConfirm(true)}
+                    className="text-sm text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-500 underline transition-colors">
+                    Reset Total Kills
+                </button>
+            </footer>
+
+
+            {/* Reset Confirmation Modal */}
+            {/* This is another example of conditional rendering. The pop-up only shows when `showResetConfirm` is true. */}
+            {showResetConfirm && (
+                <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-xl max-w-sm w-full text-center">
+                        <h3 className="text-2xl font-bold mb-4">Are you sure?</h3>
+                        <p className="text-gray-600 dark:text-gray-300 mb-6">This will reset your total kill count and badges to zero. This action cannot be undone.</p>
+                        <div className="flex gap-4">
+                            <button 
+                                onClick={() => setShowResetConfirm(false)}
+                                className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3 px-4 rounded-lg transition-transform transform active:scale-95">
+                                Cancel
+                            </button>
+                             <button 
+                                onClick={handleResetTotal}
+                                className="flex-1 bg-red-600 text-white font-bold py-3 px-4 rounded-lg transition-transform transform active:scale-95 hover:bg-red-700">
+                                Reset
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+
+
+
+
