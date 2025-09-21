@@ -54,9 +54,7 @@ const LanternflyIcon = () => (
 // --- BadgeIcon Component ---
 // Reusable UI for rendering an SVG badge inside a styled circle.
 const BadgeIcon = ({ color, icon: Icon }) => (
-  <div
-    className={`w-24 h-24 rounded-full flex items-center justify-center shadow-md ${color}`}
-  >
+  <div className={`w-24 h-24 rounded-full flex items-center justify-center shadow-md ${color}`}>
     <Icon />
   </div>
 );
@@ -440,8 +438,7 @@ export default function App() {
                             {/* We "map" over the userBadges array, creating a badge icon and label for each one they've earned. */}
                             {userBadges.map(badgeKey => (
                                 <div key={badgeKey} className="flex flex-col items-center gap-2">
-                                    <BadgeIcon color={BADGES[badgeKey].color}>
-                                        {BADGES[badgeKey].icon}
+                                    <BadgeIcon color={BADGES[badgeKey].color} icon={BADGES[badgeKey].icon} />
                                     </BadgeIcon>
                                     <span className="font-semibold">{BADGES[badgeKey].label}</span>
                                 </div>
